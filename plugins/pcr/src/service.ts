@@ -90,8 +90,8 @@ interface Monster {
   lap: number;
   /** 状况 */
   situation: {
-    fight: number;
-    hang: number;
+    fights: number[];
+    hangs: number[];
   };
 }
 
@@ -339,8 +339,8 @@ export async function initClanBattle(id: string, service: Service): Promise<stri
       lap,
       hp: -1,
       situation: {
-        fight: 0,
-        hang: 0,
+        fights: [],
+        hangs: [],
       },
     };
     monsters.push(monster);
@@ -375,8 +375,8 @@ export async function parseProgress(id: string): Promise<string> {
 
     messages.push(`${prefix} (${monster.lap}) ${hp.toLocaleString()} / ${health.toLocaleString()}`);
 
-    if (monster.situation.fight || monster.situation.hang) {
-      messages.push(`│ └ 🔪 (${monster.situation.fight}) 🌲 (${monster.situation.hang})`);
+    if (monster.situation.fights.length || monster.situation.hangs.length) {
+      messages.push(`│ └ 🔪 (${monster.situation.fights.length}) 🌲 (${monster.situation.hangs.length})`);
     }
   });
   return messages.join('\n');
@@ -452,11 +452,18 @@ export async function hitMonster(id: string, member: Member, boss: number, damag
     timestamp: Date.now(),
   };
   progress.hits.push(hit);
+  const situation = monsters[monster_index].situation;
+
+  if (situation.fights.includes(member.id)) {
+    situation.fights.splice(situation.fights.indexOf(member.id), 1);
+  } else if (situation.hangs.includes(member.id)) {
+    situation.hangs.splice(situation.hangs.indexOf(member.id), 1);
+  }
   let next_message: string | undefined;
 
   if (!monsters[monster_index].hp) {
-    monsters[monster_index].situation.fight = 0;
-    monsters[monster_index].situation.hang = 0;
+    situation.fights.length = 0;
+    situation.hangs.length = 0;
     next_message = nextLap(progress);
   }
   await db.put(id, progress);
@@ -614,7 +621,7 @@ export async function recordSituation(
   } else if (hp === 0) {
     return 'boss 已经寄了 (；′⌒`)';
   }
-  monsters[monster_index].situation[type]++;
+  monsters[monster_index].situation[type].push(member.id);
   await db.put(id, progress);
   const progress_message = await parseProgress(id);
 
