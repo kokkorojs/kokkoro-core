@@ -3,6 +3,7 @@ import { CommandContext, Metadata, useCommand } from '@kokkoro/core';
 import {
   Service,
   calcMakeUpTime,
+  recordSituation,
   getKnockOffMeme,
   hitMonster,
   initClanBattle,
@@ -131,5 +132,19 @@ export default function Priconne() {
   useCommand<{ health: string; first: string; last: string }>('/合刀计算 <health> <first> <last>', ctx => {
     const { health, first, last } = ctx.query;
     return calcMakeUpTime(health, first, last);
+  });
+  useCommand<{ boss: string }>('/出刀 <boss>', ctx => {
+    const { boss } = ctx.query;
+    const id = parseId(ctx);
+    const member = parseMember(ctx);
+
+    return recordSituation(id, member, stringToNumber(boss), 'fight');
+  });
+  useCommand<{ boss: string }>('/挂树 <boss>', ctx => {
+    const { boss } = ctx.query;
+    const id = parseId(ctx);
+    const member = parseMember(ctx);
+
+    return recordSituation(id, member, stringToNumber(boss), 'hang');
   });
 }

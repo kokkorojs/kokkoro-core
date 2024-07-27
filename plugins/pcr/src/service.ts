@@ -32,7 +32,7 @@ const digits = ['一', '二', '三', '四', '五'];
 const clanBattleInfos: ClanBattleInfo[] = [
   {
     service: 'jp',
-    ranges: [6, 22, Infinity],
+    ranges: [0, 6, 22, Infinity],
     healths: [
       [9_000_000, 12_000_000, 15_000_000, 18_000_000, 23_000_000],
       [12_000_000, 15_000_000, 20_000_000, 23_000_000, 30_000_000],
@@ -48,7 +48,7 @@ const clanBattleInfos: ClanBattleInfo[] = [
   },
   {
     service: 'tw',
-    ranges: [6, 22, Infinity],
+    ranges: [0, 6, 22, Infinity],
     healths: [
       [9_000_000, 12_000_000, 15_000_000, 18_000_000, 23_000_000],
       [12_000_000, 15_000_000, 20_000_000, 23_000_000, 30_000_000],
@@ -88,6 +88,11 @@ interface Monster {
   hp: number;
   /** 周目 */
   lap: number;
+  /** 状况 */
+  situation: {
+    fight: number;
+    hang: number;
+  };
 }
 
 /** 出刀信息 */
@@ -109,57 +114,57 @@ interface Hit {
 }
 
 /** 星座 */
-enum Zodiac {
-  Aries = '白羊座',
-  Taurus = '金牛座',
-  Gemini = '双子座',
-  Cancer = '巨蟹座',
-  Leo = '狮子座',
-  Virgo = '处女座',
-  Libra = '天秤座',
-  Scorpio = '天蝎座',
-  Sagittarius = '射手座',
-  Capricorn = '摩羯座',
-  Aquarius = '水瓶座',
-  Pisces = '双鱼座',
+type Zodiac =
+  | 'Aries'
+  | 'Taurus'
+  | 'Gemini'
+  | 'Cancer'
+  | 'Leo'
+  | 'Virgo'
+  | 'Libra'
+  | 'Scorpio'
+  | 'Sagittarius'
+  | 'Capricorn'
+  | 'Aquarius'
+  | 'Pisces'
+  | 'Ophiuchus';
+interface Constellation {
+  name: Zodiac;
+  month: number;
+  day: number;
+  emoji: string;
 }
+
+const constellations: Constellation[] = [
+  { name: 'Capricorn', month: 1, day: 19, emoji: '♑' },
+  { name: 'Aquarius', month: 1, day: 20, emoji: '♒' },
+  { name: 'Pisces', month: 2, day: 19, emoji: '♓' },
+  { name: 'Aries', month: 3, day: 21, emoji: '♈' },
+  { name: 'Taurus', month: 4, day: 20, emoji: '♉' },
+  { name: 'Gemini', month: 5, day: 21, emoji: '♊' },
+  { name: 'Cancer', month: 6, day: 22, emoji: '♋' },
+  { name: 'Leo', month: 7, day: 23, emoji: '♌' },
+  { name: 'Virgo', month: 8, day: 23, emoji: '♍' },
+  { name: 'Libra', month: 9, day: 23, emoji: '♎' },
+  { name: 'Scorpio', month: 10, day: 23, emoji: '♏' },
+  { name: 'Sagittarius', month: 11, day: 22, emoji: '♐' },
+  { name: 'Ophiuchus', month: 2, day: 30, emoji: '⛎' },
+];
 
 /**
  * 获取当月星座
  *
  * @returns 星座
  */
-function getCurrentZodiac(): Zodiac {
-  const month = new Date().getMonth() + 1;
+function getCurrentZodiac(): string {
+  const date = new Date();
+  const currentMonth = date.getMonth() + 1;
+  const currentDay = date.getDate();
+  const constellation = constellations.find(({ month, day }) => {
+    return currentMonth < month || (currentMonth === month && currentDay <= day);
+  })!;
 
-  switch (month) {
-    case 1:
-      return Zodiac.Capricorn;
-    case 2:
-      return Zodiac.Aquarius;
-    case 3:
-      return Zodiac.Pisces;
-    case 4:
-      return Zodiac.Aries;
-    case 5:
-      return Zodiac.Taurus;
-    case 6:
-      return Zodiac.Gemini;
-    case 7:
-      return Zodiac.Cancer;
-    case 8:
-      return Zodiac.Leo;
-    case 9:
-      return Zodiac.Virgo;
-    case 10:
-      return Zodiac.Libra;
-    case 11:
-      return Zodiac.Scorpio;
-    case 12:
-      return Zodiac.Sagittarius;
-    default:
-      throw new Error('Invalid month.');
-  }
+  return `${constellation.emoji} (${constellation.name})`;
 }
 
 /**
@@ -169,7 +174,7 @@ interface Progress {
   /** 服务器 */
   service: Service;
   /** 星座 */
-  zodiac: Zodiac;
+  zodiac: string;
   /** 周目 */
   lap: number;
   /** boss 信息 */
@@ -333,11 +338,15 @@ export async function initClanBattle(id: string, service: Service): Promise<stri
     const monster: Monster = {
       lap,
       hp: -1,
+      situation: {
+        fight: 0,
+        hang: 0,
+      },
     };
     monsters.push(monster);
   }
   await db.put(id, progress);
-  return `已开启${progress.zodiac}会战 (*/ω＼*)\n\n${await parseProgress(id)}`;
+  return `已开启会战 (*/ω＼*)\n\n${await parseProgress(id)}`;
 }
 
 /**
@@ -358,12 +367,17 @@ export async function parseProgress(id: string): Promise<string> {
   const clanBattleInfo = getClanBattleInfo(progress.service)!;
   const healths = clanBattleInfo.healths[stage];
 
-  messages.push(`当前 ${progress.lap} 周目，${Stage[stage]} 阶段：`);
+  messages.push(`${progress.zodiac} 当前 ${progress.lap} 周目，${Stage[stage]} 阶段：`);
   progress.monsters.map((monster, index) => {
     const health = healths[index];
     const hp = monster.hp === -1 ? health : monster.hp;
+    const prefix = index !== 4 ? '├' : '└';
 
-    messages.push(`  ${digits[index]}王：${hp.toLocaleString()} / ${health.toLocaleString()} (${monster.lap})`);
+    messages.push(`${prefix} (${monster.lap}) ${hp.toLocaleString()} / ${health.toLocaleString()}`);
+
+    if (monster.situation.fight || monster.situation.hang) {
+      messages.push(`│ └ 🔪 (${monster.situation.fight}) 🌲 (${monster.situation.hang})`);
+    }
   });
   return messages.join('\n');
 }
@@ -441,6 +455,8 @@ export async function hitMonster(id: string, member: Member, boss: number, damag
   let next_message: string | undefined;
 
   if (!monsters[monster_index].hp) {
+    monsters[monster_index].situation.fight = 0;
+    monsters[monster_index].situation.hang = 0;
     next_message = nextLap(progress);
   }
   await db.put(id, progress);
@@ -556,7 +572,58 @@ export async function skipLap(id: string, lap: number) {
   });
   await db.put(id, progress);
 
-  return `已强制跳至 ${lap} 周目，当前功能仅供测试，可能会出现未知的问题 (っ °Д °;)っ`;
+  return `已强制跳至 ${lap} 周目`;
+}
+
+/**
+ * 记录战况
+ *
+ * @param id - 群聊 id
+ * @param member - 成员
+ * @param boss - boss
+ * @param type - 战况类型
+ * @returns 进度信息
+ */
+export async function recordSituation(
+  id: string,
+  member: Member,
+  boss: number,
+  type: 'fight' | 'hang',
+): Promise<string> {
+  const has_battle = await db.has(id);
+
+  if (!has_battle) {
+    return '当月未发起会战 (⊙x⊙;)';
+  }
+  if (![1, 2, 3, 4, 5].includes(boss)) {
+    return '请输入合法的数值，boss 应为 1 ~ 5';
+  }
+  const monster_index = boss - 1;
+  const progress = await db.get(id);
+  const monsters = progress.monsters;
+  const hits = progress.hits;
+  const stage = getStage(progress.lap, progress.service)!;
+  const clanBattleInfo = getClanBattleInfo(progress.service)!;
+  const healths = clanBattleInfo.healths[stage];
+  const health = healths[monster_index];
+  const hp = monsters[monster_index].hp === -1 ? health : <number>monsters[monster_index].hp;
+  const today_hit_count = getMemberTodayHitCount(member.id, hits);
+
+  if (today_hit_count === 3) {
+    return '你今天已经出完 3 刀啦 (～￣▽￣)～';
+  } else if (hp === 0) {
+    return 'boss 已经寄了 (；′⌒`)';
+  }
+  monsters[monster_index].situation[type]++;
+  await db.put(id, progress);
+  const progress_message = await parseProgress(id);
+
+  switch (type) {
+    case 'fight':
+      return `${member.name ?? ''}开始挑战${digits[monster_index]}王\n\n${progress_message}`;
+    case 'hang':
+      return `${member.name ?? ''}在${digits[monster_index]}王挂树力（悲）\n\n${progress_message}`;
+  }
 }
 
 /**
